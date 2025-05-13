@@ -22,11 +22,10 @@ multi-node-demo
 ```
 
 ## Installation
-
 1. Clone the repository:
    ```
    git clone https://github.com/AgileGxP-GAnderson/multi-node-demo.git
-   cd nats-monitoring-system
+   
    ```
 
 2. Install the dependencies:
