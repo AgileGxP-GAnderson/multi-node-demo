@@ -34,44 +34,77 @@ async function startTranslator(translatorId: string) {
     };
     monitorHealth();
 
+    // Wait for at least one heartbeat interval before attempting leadership
+    await new Promise(resolve => setTimeout(resolve, 2200));
+    // Actively process health and leader messages for a short period before attempting leadership
+    const primeStart = Date.now();
+    while (Date.now() - primeStart < 1500) {
+        // Let the event loop process other tasks
+        await new Promise(res => setTimeout(res, 50));
+    }
+    // Log healthStatus after priming
+    console.log(`Translator ${translatorId} healthStatus after priming:`, JSON.stringify(healthStatus));
+    // If no other healthy engines detected, wait again and prime again before claiming leadership
+    if (Object.keys(healthStatus).filter(id => id !== translatorId).length === 0) {
+        console.log(`Translator ${translatorId} did not detect other engines, waiting and priming again before claiming leadership...`);
+        await new Promise(resolve => setTimeout(resolve, 2200));
+        const primeStart2 = Date.now();
+        while (Date.now() - primeStart2 < 1500) {
+            await new Promise(res => setTimeout(res, 50));
+        }
+        console.log(`Translator ${translatorId} healthStatus after second priming:`, JSON.stringify(healthStatus));
+    }
+
     // Leader election
     const attemptLeadership = async () => {
         const now = Date.now();
-        if (currentLeader && healthStatus[currentLeader.translatorId]) {
-            const lastHeartbeat = healthStatus[currentLeader.translatorId].timestamp;
-            if (now - lastHeartbeat < 5000) return; // Leader healthy (5s timeout)
-        }
-
-        const claim = { translatorId, claimedAt: now };
-        nc.publish('leader.election', sc.encode(JSON.stringify(claim)));
-        console.log(`Translator ${translatorId} claimed leadership`);
-
-        // Publish buffered messages if becoming leader
-        if (messageBuffer.length > 0) {
-            for (const { translated } of messageBuffer) {
-                nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
-                console.log(`Translator ${translatorId} (new leader) published buffered: ${translated.payload}`);
-            }
-            messageBuffer.length = 0;
+        // If there is no current leader at all, or the leader is unhealthy, claim leadership
+        if (!currentLeader || !currentLeader.translatorId || !healthStatus[currentLeader.translatorId] || (now - healthStatus[currentLeader.translatorId].timestamp >= 5000)) {
+            const claim = { translatorId, claimedAt: now };
+            nc.publish('leader.election', sc.encode(JSON.stringify(claim)));
+            console.log(`Translator ${translatorId} claimed leadership`);
         }
     };
 
     const monitorLeadership = async () => {
         for await (const msg of leaderSub) {
             const claim = JSON.parse(sc.decode(msg.data));
-            if (!currentLeader || claim.claimedAt <= currentLeader.claimedAt) {
-                currentLeader = claim;
-                const wasLeader = isLeader;
-                isLeader = claim.translatorId === translatorId;
-                if (isLeader && !wasLeader && messageBuffer.length > 0) {
-                    for (const { translated } of messageBuffer) {
-                        nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
-                        console.log(`Translator ${translatorId} (new leader) published buffered: ${translated.payload}`);
+            // Deterministic leader selection: earliest claimedAt, tie-breaker by lowest translatorId
+            if (!currentLeader || claim.claimedAt < currentLeader.claimedAt ||
+                (claim.claimedAt === currentLeader.claimedAt && claim.translatorId < currentLeader.translatorId)) {
+                // Only accept a new leader if the previous leader is unhealthy or missing
+                const now = Date.now();
+                let prevLeaderHealthy = false;
+                if (currentLeader && healthStatus[currentLeader.translatorId]) {
+                    const lastHeartbeat = healthStatus[currentLeader.translatorId].timestamp;
+                    prevLeaderHealthy = (now - lastHeartbeat) < 5000;
+                    if (!prevLeaderHealthy) {
+                        console.log(now - lastHeartbeat, now)
                     }
-                    messageBuffer.length = 0;
+
                 }
-                console.log(`Translator ${translatorId} ${isLeader ? 'is leader' : 'follows leader'} ${currentLeader ? currentLeader.translatorId : 'no leader'}`);
+                if (!prevLeaderHealthy || !currentLeader) {
+                    currentLeader = claim;
+                }
             }
+            const wasLeader = isLeader;
+            isLeader = !!currentLeader && currentLeader.translatorId === translatorId;
+            if (isLeader && !wasLeader && messageBuffer.length > 0) {
+                for (const { translated } of messageBuffer) {
+                    nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
+                    console.log(`Translator ${translatorId} (new leader) published buffered: ${translated.payload}`);
+                }
+                messageBuffer.length = 0;
+            }
+            // If the current leader is unhealthy, trigger a new leadership attempt for all
+            if (currentLeader && healthStatus[currentLeader.translatorId]) {
+                const now = Date.now();
+                const lastHeartbeat = healthStatus[currentLeader.translatorId].timestamp;
+                if (now - lastHeartbeat >= 5000) {
+                    setTimeout(attemptLeadership, 0); // All engines should attempt leadership
+                }
+            }
+            console.log(`Translator ${translatorId} ${isLeader ? 'is leader' : 'follows leader'} ${currentLeader ? currentLeader.translatorId : 'no leader'}`);
         }
     };
     monitorLeadership();
@@ -83,8 +116,7 @@ async function startTranslator(translatorId: string) {
     for await (const msg of msgSub) {
         try {
             const message = JSON.parse(sc.decode(msg.data));
-            // console.log(`Translator ${translatorId} received: ${message.payload}`);
-
+            // Only the leader publishes
             const translated = { id: message.id, payload: `Translated: ${message.payload}` };
             if (isLeader) {
                 nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
@@ -103,7 +135,20 @@ async function startTranslator(translatorId: string) {
     await nc.closed();
 }
 
-startTranslator(process.env.TRANSLATOR_ID || 'unknown').catch(err => {
+// Parse ENGINE_ID from command line arguments
+function getEngineId(): string {
+    const arg = process.argv.find(a => a.startsWith('--ENGINE_ID'));
+    if (arg) {
+        const parts = arg.split('=');
+        if (parts.length === 2) return parts[1];
+        // Support --ENGINE_ID engine1
+        const idx = process.argv.indexOf(arg);
+        if (process.argv[idx + 1]) return process.argv[idx + 1];
+    }
+    return 'unknown';
+}
+
+startTranslator(getEngineId()).catch(err => {
     console.error('Error:', err);
     process.exit(1);
 });

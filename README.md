@@ -54,6 +54,9 @@ npx ts-node src\nodes\publisher.ts
 -- Start health monitor
 npx ts-node src\nodes\health-monitor.ts
 
+-- Optional : to 'spy' on NATS message for troubleshooting:
+npx ts-node src\nodes\sniffer.ts
+
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
