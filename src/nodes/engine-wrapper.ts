@@ -14,7 +14,7 @@ async function startTranslator(translatorId: string) {
     // Subscribe to leader election, raw messages, and health
     const leaderSub: Subscription = nc.subscribe('leader.election');
     const msgSub = nc.subscribe('raw.messages');
-    const healthSub = nc.subscribe('health.status');
+    const healthSub = nc.subscribe('health.status');8
 
     // Health heartbeat every 2 seconds
     const reportHealth = async () => {
@@ -111,6 +111,16 @@ async function startTranslator(translatorId: string) {
 
     setInterval(attemptLeadership, 6000);
     attemptLeadership();
+
+    // Periodically re-publish leadership claim if this engine is the leader
+    setInterval(() => {
+        if (isLeader) {
+            const claim = { translatorId, claimedAt: currentLeader ? currentLeader.claimedAt : Date.now() };
+            nc.publish('leader.election', sc.encode(JSON.stringify(claim)));
+            // Optionally log this for debugging
+            // console.log(`Translator ${translatorId} (leader) re-published leadership claim`);
+        }
+    }, 3000); // every 3 seconds
 
     // Process messages
     for await (const msg of msgSub) {

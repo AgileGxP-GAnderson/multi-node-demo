@@ -25,7 +25,7 @@ multi-node-demo
 
 1. Clone the repository:
    ```
-   git clone https://github.com/yourusername/nats-monitoring-system.git
+   git clone https://github.com/AgileGxP-GAnderson/multi-node-demo.git
    cd nats-monitoring-system
    ```
 
@@ -57,10 +57,3 @@ npx ts-node src\nodes\health-monitor.ts
 -- Optional : to 'spy' on NATS message for troubleshooting:
 npx ts-node src\nodes\sniffer.ts
 
-## Contributing
-
-Contributions are welcome! Please open an issue or submit a pull request for any improvements or bug fixes.
-
-## License
-
-This project is licensed under the MIT License. See the LICENSE file for details.

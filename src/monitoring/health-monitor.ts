@@ -34,8 +34,15 @@ export async function startHealthMonitor() {
         const healthyTranslators = Object.entries(healthStatus)
             .filter(([_, status]) => now - status.timestamp < 20000)
             .map(([translatorId]) => translatorId);
+        let leaderStatus = 'none';
+        if (currentLeader) {
+            leaderStatus = currentLeader;
+            if (!healthyTranslators.includes(currentLeader)) {
+                leaderStatus += ' (unhealthy)';
+            }
+        }
         console.log(`Healthy translators (${healthyTranslators.length}):`, healthyTranslators);
-        console.log(`Current leader: ${currentLeader || 'none'}`);
+        console.log(`Current leader: ${leaderStatus}`);
     };
     setInterval(reportHealthy, 5000);
 
