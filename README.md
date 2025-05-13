@@ -36,12 +36,23 @@ multi-node-demo
 
 ## Usage
 
-To start the monitoring system, run the following command:
+To start the monitoring system, run the following commands:
 ```
-npm start
-```
+-- Start NATS
+nats-server.exe
 
-This will initialize the NATS connection and begin monitoring the nodes.
+-- Start engine wrappers.  Name as you will
+npx ts-node src\nodes\engine-wrapper.ts --name engine1
+npx ts-node src\nodes\engine-wrapper.ts --name engine2
+
+-- Start subscriber 
+npx ts-node src\nodes\subscriber.ts
+
+-- Start publisher
+npx ts-node src\nodes\publisher.ts
+
+-- Start health monitor
+npx ts-node src\nodes\health-monitor.ts
 
 ## Contributing
 

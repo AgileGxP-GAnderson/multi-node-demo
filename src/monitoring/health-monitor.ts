@@ -4,7 +4,7 @@ const sc = StringCodec();
 const healthStatus: { [id: string]: { timestamp: number } } = {};
 let currentLeader: string | null = null;
 
-async function startHealthMonitor() {
+export async function startHealthMonitor() {
     const nc = await connect({ servers: 'nats://localhost:4222' });
     console.log('Health monitor connected');
 
@@ -37,12 +37,14 @@ async function startHealthMonitor() {
         console.log(`Healthy translators (${healthyTranslators.length}):`, healthyTranslators);
         console.log(`Current leader: ${currentLeader || 'none'}`);
     };
-    setInterval(reportHealthy, 15000);
+    setInterval(reportHealthy, 5000);
 
     await nc.closed();
 }
 
-startHealthMonitor().catch(err => {
-    console.error('Error:', err);
-    process.exit(1);
-});
+if (require.main === module) {
+    startHealthMonitor().catch(err => {
+        console.error('Error:', err);
+        process.exit(1);
+    });
+}

@@ -3,18 +3,27 @@ import { v4 as uuidv4 } from 'uuid';
 
 const sc = StringCodec();
 
-async function sendMessage(payload: string) {
+async function startPublisher() {
     const nc = await connect({ servers: 'nats://localhost:4222' });
     console.log('Publisher connected');
 
-    const message = { id: uuidv4(), payload };
-    nc.publish('raw.messages', sc.encode(JSON.stringify(message)));
-    console.log(`Published: ${JSON.stringify(message)}`);
+    setInterval(() => {
+        const now = new Date();
+        const minutes = now.getMinutes();
+        const seconds = now.getSeconds();
+        const message = {
+            id: uuidv4(),
+            payload: `PING! - ${minutes}:${seconds.toString().padStart(2, '0')}`,
+            timestamp: Date.now()
+        };
+        nc.publish('raw.messages', sc.encode(JSON.stringify(message)));
+        console.log(`Published: ${JSON.stringify(message)}`);
+    }, 1000);
 
-    await nc.drain();
+    await nc.closed();
 }
 
-sendMessage('Hello, NATS!').catch(err => {
+startPublisher().catch(err => {
     console.error('Error:', err);
     process.exit(1);
 });

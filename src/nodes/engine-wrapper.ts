@@ -70,7 +70,7 @@ async function startTranslator(translatorId: string) {
                     }
                     messageBuffer.length = 0;
                 }
-                console.log(`Translator ${translatorId} ${isLeader ? 'is leader' : 'follows leader'} ${currentLeader.translatorId}`);
+                console.log(`Translator ${translatorId} ${isLeader ? 'is leader' : 'follows leader'} ${currentLeader ? currentLeader.translatorId : 'no leader'}`);
             }
         }
     };
