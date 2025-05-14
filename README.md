@@ -41,8 +41,8 @@ To start the monitoring system, run the following commands:
 nats-server.exe
 
 -- Start engine wrappers.  Name as you will
-npx ts-node src\nodes\engine-wrapper.ts --name engine1
-npx ts-node src\nodes\engine-wrapper.ts --name engine2
+npx ts-node src\nodes\engine-wrapper.ts --ENGINE_ID engine1
+npx ts-node src\nodes\engine-wrapper.ts --ENGINE_ID engine2
 
 -- Start subscriber 
 npx ts-node src\nodes\subscriber.ts
@@ -51,7 +51,7 @@ npx ts-node src\nodes\subscriber.ts
 npx ts-node src\nodes\publisher.ts
 
 -- Start health monitor
-npx ts-node src\nodes\health-monitor.ts
+npx ts-node src\monitoring\health-monitor.ts
 
 -- Optional : to 'spy' on NATS message for troubleshooting:
 npx ts-node src\nodes\sniffer.ts
