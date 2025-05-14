@@ -70,31 +70,31 @@ async function startTranslator(translatorId: string) {
         for await (const msg of leaderSub) {
             const claim = JSON.parse(sc.decode(msg.data));
             // Deterministic leader selection: earliest claimedAt, tie-breaker by lowest translatorId
-            if (!currentLeader || claim.claimedAt < currentLeader.claimedAt ||
+            let prevLeaderHealthy = false;
+            if (currentLeader && healthStatus[currentLeader.translatorId]) {
+                const lastHeartbeat = healthStatus[currentLeader.translatorId].timestamp;
+                prevLeaderHealthy = (Date.now() - lastHeartbeat) < 5000;
+            }
+            // Accept new leader if:
+            // 1. There is no current leader
+            // 2. The previous leader is unhealthy
+            // 3. The new claim is better (earlier claimedAt or lower translatorId)
+            if (!currentLeader || !prevLeaderHealthy || claim.claimedAt < currentLeader.claimedAt ||
                 (claim.claimedAt === currentLeader.claimedAt && claim.translatorId < currentLeader.translatorId)) {
-                // Only accept a new leader if the previous leader is unhealthy or missing
-                const now = Date.now();
-                let prevLeaderHealthy = false;
-                if (currentLeader && healthStatus[currentLeader.translatorId]) {
-                    const lastHeartbeat = healthStatus[currentLeader.translatorId].timestamp;
-                    prevLeaderHealthy = (now - lastHeartbeat) < 5000;
-                    if (!prevLeaderHealthy) {
-                        console.log(now - lastHeartbeat, now)
-                    }
-
-                }
-                if (!prevLeaderHealthy || !currentLeader) {
-                    currentLeader = claim;
-                }
+                currentLeader = claim;
             }
             const wasLeader = isLeader;
             isLeader = !!currentLeader && currentLeader.translatorId === translatorId;
-            if (isLeader && !wasLeader && messageBuffer.length > 0) {
-                for (const { translated } of messageBuffer) {
-                    nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
-                    console.log(`Translator ${translatorId} (new leader) published buffered: ${translated.payload}`);
+            if (isLeader && !wasLeader) {
+                if (messageBuffer.length > 0) {
+                    for (const { translated } of messageBuffer) {
+                        nc.publish('translated.messages', sc.encode(JSON.stringify(translated)));
+                        console.log(`Translator ${translatorId} (new leader) published buffered: ${translated.payload}`);
+                    }
+                    messageBuffer.length = 0;
+                } else {
+                    console.log(`Translator ${translatorId} (new leader) has no buffered messages to publish.`);
                 }
-                messageBuffer.length = 0;
             }
             // If the current leader is unhealthy, trigger a new leadership attempt for all
             if (currentLeader && healthStatus[currentLeader.translatorId]) {
